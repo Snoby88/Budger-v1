@@ -336,22 +336,12 @@ export default function App() {
       ? `Du er en dansk finansiel rådgiver. Analyser dette kontoudtog og giv en struktureret analyse på dansk:\n\n${uploadedText}\n\nGiv følgende i JSON format:\n{\n  "overblik": "2-3 sætninger",\n  "topUdgifter": [{"kategori": "...", "beløb": 0, "tip": "..."}],\n  "styrker": ["..."],\n  "advarsler": ["..."],\n  "strategier": [{"titel": "...", "beskrivelse": "...", "besparelse": "..."}],\n  "score": 0\n}\nKun JSON, ingen markdown.`
       : `Du er en dansk finansiel rådgiver. Analyser disse transaktioner:\n\n${txSummary}\n\nGiv følgende i JSON format:\n{\n  "overblik": "2-3 sætninger",\n  "topUdgifter": [{"kategori": "...", "beløb": 0, "tip": "..."}],\n  "styrker": ["..."],\n  "advarsler": ["..."],\n  "strategier": [{"titel": "...", "beskrivelse": "...", "besparelse": "..."}],\n  "score": 0\n}\nKun JSON, ingen markdown.`;
     try {
-     const res = await fetch('/.netlify/functions/claude', {
+  const res = await fetch('/.netlify/functions/claude', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
     messages: [{ role: 'user', content: prompt }],
   }),
-      );
-      const data = await res.json();
-      if (data.error) {
-        setAiError(data.error.message);
-        setAiLoading(false);
-        return;
-      }
-      const text = data.content[0].text.replace(/```json|```/g, '').trim();
-      setAiAnalysis(JSON.parse(text));
-    } catch (err) {
       setAiError('Fejl: ' + err.message);
     }
     setAiLoading(false);
