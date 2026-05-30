@@ -337,8 +337,7 @@ export default function App() {
       : `Du er en dansk finansiel rådgiver. Analyser disse transaktioner:\n\n${txSummary}\n\nGiv følgende i JSON format:\n{\n  "overblik": "2-3 sætninger",\n  "topUdgifter": [{"kategori": "...", "beløb": 0, "tip": "..."}],\n  "styrker": ["..."],\n  "advarsler": ["..."],\n  "strategier": [{"titel": "...", "beskrivelse": "...", "besparelse": "..."}],\n  "score": 0\n}\nKun JSON, ingen markdown.`;
     try {
       const res = await fetch(
-        'https://api.allorigins.win/raw?url=' +
-          encodeURIComponent('https://api.anthropic.com/v1/messages'),
+        '/.netlify/functions/claude',
         {
           method: 'POST',
           headers: {
@@ -346,11 +345,7 @@ export default function App() {
             'x-api-key': apiKey,
             'anthropic-version': '2023-06-01',
           },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 1500,
-            messages: [{ role: 'user', content: prompt }],
-          }),
+            body: JSON.stringify({ apiKey, messages: [{ role: 'user', content: prompt }],
         }
       );
       const data = await res.json();
