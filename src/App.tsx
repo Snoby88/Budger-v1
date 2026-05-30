@@ -351,7 +351,7 @@ export default function App() {
                 <h3 style={{ ...s.cardTitle, margin: 0 }}>Upload kontoudtog (CSV)</h3>
               </div>
               <div style={{ border: '2px dashed #2d3f5e', borderRadius: 12, padding: 30, textAlign: 'center' }}>
-                <input type="file" accept=".csv,.txt" onChange={handleFileUpload} style={{ display: 'none' }} id="fileInput" />
+                <input type="file" accept=".csv,.txt,.pdf" onChange={handleFileUpload} style={{ display: 'none' }} id="fileInput" />
                 <label htmlFor="fileInput" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                   <Upload size={24} color="#4ECDC4" />
                   <span style={{ color: '#94a3b8', fontSize: 14 }}>{uploadedText ? '✅ Fil indlæst!' : 'Klik for at vælge fil'}</span>
