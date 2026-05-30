@@ -1,12 +1,12 @@
 // @ts-nocheck
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from 'recharts';
 import {
   TrendingUp, Target, Plus, Trash2, Wallet,
-  ArrowUpCircle, ArrowDownCircle, Brain, Upload, Key, TrendingDown,
+  ArrowUpCircle, ArrowDownCircle, Brain, Upload, Key, X, MessageCircle, Send, RefreshCw,
 } from 'lucide-react';
 
 const COLORS = ['#D4A853','#4ECDC4','#E8734A','#6B8CFF','#A78BFA','#34D399','#F472B6','#60A5FA'];
@@ -34,21 +34,28 @@ const getPrevMonth = (month) => {
 };
 const pct = (curr, prev) => prev === 0 ? null : (((curr - prev) / prev) * 100).toFixed(1);
 
+const DEFAULT_BUDGETS = {
+  'Bolig': 10000, 'Mad & Drikke': 4000, 'Transport': 2000,
+  'Abonnementer': 1000, 'Tøj': 2000, 'Underholdning': 1500,
+  'Sundhed': 1000, 'Opsparing': 3000, 'Andet': 2000,
+};
+
 const initialTransactions = [
-  { id: 1, type: 'income', amount: 38000, category: 'Løn', description: 'Månedlig løn', date: '2026-05-25' },
-  { id: 2, type: 'expense', amount: 9500, category: 'Bolig', description: 'Husleje', date: '2026-05-01' },
-  { id: 3, type: 'expense', amount: 3200, category: 'Mad & Drikke', description: 'Dagligvarer', date: '2026-05-15' },
-  { id: 4, type: 'expense', amount: 499, category: 'Abonnementer', description: 'Streaming', date: '2026-05-10' },
-  { id: 5, type: 'income', amount: 5000, category: 'Freelance', description: 'Design projekt', date: '2026-05-20' },
-  { id: 6, type: 'expense', amount: 1200, category: 'Transport', description: 'DSB kort', date: '2026-05-01' },
-  { id: 7, type: 'expense', amount: 2000, category: 'Opsparing', description: 'Månedlig opsparing', date: '2026-05-05' },
-  { id: 8, type: 'income', amount: 38000, category: 'Løn', description: 'Månedlig løn', date: '2026-04-25' },
-  { id: 9, type: 'expense', amount: 9500, category: 'Bolig', description: 'Husleje', date: '2026-04-01' },
-  { id: 10, type: 'expense', amount: 4100, category: 'Mad & Drikke', description: 'Dagligvarer', date: '2026-04-15' },
-  { id: 11, type: 'expense', amount: 499, category: 'Abonnementer', description: 'Streaming', date: '2026-04-10' },
-  { id: 12, type: 'expense', amount: 1200, category: 'Transport', description: 'DSB kort', date: '2026-04-01' },
-  { id: 13, type: 'expense', amount: 2500, category: 'Tøj', description: 'Nyt tøj', date: '2026-04-20' },
+  { id: 1, type: 'income', amount: 38000, category: 'Løn', description: 'Månedlig løn', date: '2026-05-25', recurring: true },
+  { id: 2, type: 'expense', amount: 9500, category: 'Bolig', description: 'Husleje', date: '2026-05-01', recurring: true },
+  { id: 3, type: 'expense', amount: 3200, category: 'Mad & Drikke', description: 'Dagligvarer', date: '2026-05-15', recurring: false },
+  { id: 4, type: 'expense', amount: 499, category: 'Abonnementer', description: 'Streaming', date: '2026-05-10', recurring: true },
+  { id: 5, type: 'income', amount: 5000, category: 'Freelance', description: 'Design projekt', date: '2026-05-20', recurring: false },
+  { id: 6, type: 'expense', amount: 1200, category: 'Transport', description: 'DSB kort', date: '2026-05-01', recurring: true },
+  { id: 7, type: 'expense', amount: 2000, category: 'Opsparing', description: 'Månedlig opsparing', date: '2026-05-05', recurring: true },
+  { id: 8, type: 'income', amount: 38000, category: 'Løn', description: 'Månedlig løn', date: '2026-04-25', recurring: true },
+  { id: 9, type: 'expense', amount: 9500, category: 'Bolig', description: 'Husleje', date: '2026-04-01', recurring: true },
+  { id: 10, type: 'expense', amount: 4100, category: 'Mad & Drikke', description: 'Dagligvarer', date: '2026-04-15', recurring: false },
+  { id: 11, type: 'expense', amount: 499, category: 'Abonnementer', description: 'Streaming', date: '2026-04-10', recurring: true },
+  { id: 12, type: 'expense', amount: 1200, category: 'Transport', description: 'DSB kort', date: '2026-04-01', recurring: true },
+  { id: 13, type: 'expense', amount: 2500, category: 'Tøj', description: 'Nyt tøj', date: '2026-04-20', recurring: false },
 ];
+
 const initialGoals = [
   { id: 1, name: 'Sommerferie', target: 20000, saved: 8500, color: '#D4A853', icon: '✈️' },
   { id: 2, name: 'Nødfond', target: 50000, saved: 22000, color: '#4ECDC4', icon: '🛡️' },
@@ -64,27 +71,39 @@ export default function App() {
     const saved = localStorage.getItem('budget_goals');
     return saved ? JSON.parse(saved) : initialGoals;
   });
+  const [budgets, setBudgets] = useState(() => {
+    const saved = localStorage.getItem('budget_limits');
+    return saved ? JSON.parse(saved) : DEFAULT_BUDGETS;
+  });
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('budget_apikey') || '');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showForm, setShowForm] = useState(false);
   const [showGoalForm, setShowGoalForm] = useState(false);
+  const [showBudgetForm, setShowBudgetForm] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
-  const [form, setForm] = useState({ type: 'expense', amount: '', category: 'Mad & Drikke', description: '', date: today() });
+  const [form, setForm] = useState({ type: 'expense', amount: '', category: 'Mad & Drikke', description: '', date: today(), recurring: false });
   const [goalForm, setGoalForm] = useState({ name: '', target: '', saved: '', icon: '🎯' });
   const [addGoalAmount, setAddGoalAmount] = useState({});
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
-  const [uploadedText, setUploadedText] = useState('');
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [chatMessages, setChatMessages] = useState([
+    { role: 'assistant', content: 'Hej! Jeg er din personlige økonomi-assistent. Stil mig spørgsmål om dine udgifter, f.eks. "Hvad brugte jeg mest på i maj?" eller "Hvordan ser min opsparing ud?"' }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef(null);
 
   useEffect(() => { localStorage.setItem('budget_transactions', JSON.stringify(transactions)); }, [transactions]);
   useEffect(() => { localStorage.setItem('budget_goals', JSON.stringify(goals)); }, [goals]);
+  useEffect(() => { localStorage.setItem('budget_limits', JSON.stringify(budgets)); }, [budgets]);
   useEffect(() => { localStorage.setItem('budget_apikey', apiKey); }, [apiKey]);
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
 
   const monthTx = useMemo(() => transactions.filter(t => monthKey(t.date) === selectedMonth), [transactions, selectedMonth]);
   const prevMonth = useMemo(() => getPrevMonth(selectedMonth), [selectedMonth]);
   const prevMonthTx = useMemo(() => transactions.filter(t => monthKey(t.date) === prevMonth), [transactions, prevMonth]);
-
   const totalIncome = useMemo(() => monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0), [monthTx]);
   const totalExpense = useMemo(() => monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0), [monthTx]);
   const prevIncome = useMemo(() => prevMonthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0), [prevMonthTx]);
@@ -93,9 +112,23 @@ export default function App() {
   const prevBalance = prevIncome - prevExpense;
   const savingsRate = totalIncome > 0 ? ((balance / totalIncome) * 100).toFixed(1) : 0;
 
+  const categorySpend = useMemo(() => {
+    const map = {};
+    monthTx.filter(t => t.type === 'expense').forEach(t => { map[t.category] = (map[t.category] || 0) + t.amount; });
+    return map;
+  }, [monthTx]);
+
+  const budgetAlerts = useMemo(() => {
+    return Object.entries(categorySpend).filter(([cat, spent]) => {
+      const limit = budgets[cat];
+      return limit && spent >= limit * 0.8;
+    }).map(([cat, spent]) => ({ cat, spent, limit: budgets[cat], pct: Math.round((spent / budgets[cat]) * 100) }));
+  }, [categorySpend, budgets]);
+
+  const recurringTx = useMemo(() => transactions.filter(t => t.recurring), [transactions]);
+
   const monthComparison = useMemo(() => {
-    const categories = CATEGORIES.expense;
-    return categories.map(cat => {
+    return CATEGORIES.expense.map(cat => {
       const curr = monthTx.filter(t => t.type === 'expense' && t.category === cat).reduce((s, t) => s + t.amount, 0);
       const prev = prevMonthTx.filter(t => t.type === 'expense' && t.category === cat).reduce((s, t) => s + t.amount, 0);
       return { cat, curr, prev, diff: curr - prev, pctChange: pct(curr, prev) };
@@ -103,17 +136,15 @@ export default function App() {
   }, [monthTx, prevMonthTx]);
 
   const pieData = useMemo(() => {
-    const map = {};
-    monthTx.filter(t => t.type === 'expense').forEach(t => { map[t.category] = (map[t.category] || 0) + t.amount; });
-    return Object.entries(map).map(([name, value]) => ({ name, value }));
-  }, [monthTx]);
+    return Object.entries(categorySpend).map(([name, value]) => ({ name, value }));
+  }, [categorySpend]);
 
   const barData = useMemo(() => {
     const months = {};
     transactions.forEach(t => {
       const m = monthKey(t.date);
-      if (!months[m]) months[m] = { month: m.slice(5), Indtægt: 0, Udgift: 0 };
-      if (t.type === 'income') months[m].Indtægt += t.amount;
+      if (!months[m]) months[m] = { month: m.slice(5), Indtaegt: 0, Udgift: 0 };
+      if (t.type === 'income') months[m].Indtaegt += t.amount;
       else months[m].Udgift += t.amount;
     });
     return Object.values(months).sort((a, b) => a.month.localeCompare(b.month));
@@ -122,9 +153,21 @@ export default function App() {
   const addTransaction = () => {
     if (!form.amount || !form.date) return;
     setTransactions(prev => [...prev, { ...form, id: Date.now(), amount: parseFloat(form.amount) }]);
-    setForm({ type: 'expense', amount: '', category: 'Mad & Drikke', description: '', date: today() });
+    setForm({ type: 'expense', amount: '', category: 'Mad & Drikke', description: '', date: today(), recurring: false });
     setShowForm(false);
   };
+
+  const addRecurringNow = () => {
+    const nextMonth = currentMonth();
+    recurringTx.forEach(t => {
+      const newDate = t.date.replace(monthKey(t.date), nextMonth);
+      if (!transactions.find(tx => tx.description === t.description && monthKey(tx.date) === nextMonth)) {
+        setTransactions(prev => [...prev, { ...t, id: Date.now() + Math.random(), date: newDate }]);
+      }
+    });
+    alert('Tilbagevendende transaktioner tilfojet for denne maned!');
+  };
+
   const deleteTransaction = (id) => setTransactions(prev => prev.filter(t => t.id !== id));
   const addGoal = () => {
     if (!goalForm.name || !goalForm.target) return;
@@ -139,27 +182,50 @@ export default function App() {
     setAddGoalAmount(prev => ({ ...prev, [id]: '' }));
   };
   const deleteGoal = (id) => setGoals(prev => prev.filter(g => g.id !== id));
+  const removeFile = (idx) => setUploadedFiles(prev => prev.filter((_, i) => i !== idx));
 
   const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.type === 'application/pdf') {
-      const pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      let fullText = '';
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        fullText += content.items.map(item => item.str).join(' ') + '\n';
+    const files = Array.from(e.target.files);
+    for (const file of files) {
+      let text = '';
+      if (file.type === 'application/pdf') {
+        try {
+          const pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            text += content.items.map(item => item.str).join(' ') + '\n';
+          }
+        } catch (err) {
+          text = 'Fejl ved lasning af PDF: ' + err.message;
+        }
+      } else {
+        text = await new Promise(resolve => {
+          const reader = new FileReader();
+          reader.onload = (ev) => resolve(ev.target?.result);
+          reader.readAsText(file);
+        });
       }
-      setUploadedText(fullText);
-    } else {
-      const reader = new FileReader();
-      reader.onload = (ev) => setUploadedText(ev.target?.result);
-      reader.readAsText(file);
+      setUploadedFiles(prev => {
+        if (prev.find(f => f.name === file.name)) return prev;
+        return [...prev, { name: file.name, text }];
+      });
     }
+    e.target.value = '';
+  };
+
+  const callAI = async (messages) => {
+    const res = await fetch('/.netlify/functions/claude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    return data.content[0].text;
   };
 
   const runAiAnalysis = async () => {
@@ -168,43 +234,95 @@ export default function App() {
     setAiError('');
     setAiAnalysis(null);
     const txSummary = transactions
-      .map(t => `${t.date} | ${t.type === 'income' ? 'Indtægt' : 'Udgift'} | ${t.category} | ${t.description} | ${t.amount} kr`)
+      .map(t => t.date + ' | ' + (t.type === 'income' ? 'Indtaegt' : 'Udgift') + ' | ' + t.category + ' | ' + t.description + ' | ' + t.amount + ' kr')
       .join('\n');
-  const prompt = uploadedText
-      ? `Du er en dansk finansiel rådgiver. Analyser dette kontoudtog.\n\nIdentificér automatisk hvilken periode dataene dækker og inkludér det i dit overblik.\n\nKontoudtog:\n${uploadedText.slice(0, 12000)}\n\nGiv følgende i JSON format:\n{\n  "overblik": "Inkludér den identificerede periode og 2-3 sætninger",\n  "topUdgifter": [{"kategori": "...", "beløb": 0, "tip": "..."}],\n  "styrker": ["..."],\n  "advarsler": ["..."],\n  "strategier": [{"titel": "...", "beskrivelse": "...", "besparelse": "..."}],\n  "score": 0\n}\nKun JSON, ingen markdown.`
-      : `Du er en dansk finansiel rådgiver. Analyser disse transaktioner og identificér automatisk perioden:\n\n${txSummary}\n\nGiv følgende i JSON format:\n{\n  "overblik": "Inkludér den identificerede periode og 2-3 sætninger",\n  "topUdgifter": [{"kategori": "...", "beløb": 0,
+    const combinedFiles = uploadedFiles.map(f => '=== ' + f.name + ' ===\n' + f.text).join('\n\n');
+    const content = uploadedFiles.length > 0
+      ? 'Du er en dansk finansiel radgiver. Analyser disse kontoudtog fra ' + uploadedFiles.length + ' bank(er).\n\nIdentificer automatisk hvilken periode dataene daekker og inkluder det i dit overblik.\n\nKontoudtog:\n' + combinedFiles.slice(0, 12000)
+      : 'Du er en dansk finansiel radgiver. Analyser disse transaktioner og identificer automatisk perioden:\n\n' + txSummary;
+    const fullPrompt = content + '\n\nGiv folgende i JSON format:\n{"overblik":"2-3 saetninger inkl periode","topUdgifter":[{"kategori":"...","belob":0,"tip":"..."}],"styrker":["..."],"advarsler":["..."],"strategier":[{"titel":"...","beskrivelse":"...","besparelse":"..."}],"score":0}\nKun JSON, ingen markdown.';
     try {
-      const res = await fetch('/.netlify/functions/claude', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
-      });
-      const data = await res.json();
-      if (data.error) { setAiError(data.error.message); setAiLoading(false); return; }
-      const text = data.content[0].text.replace(/```json|```/g, '').trim();
-      setAiAnalysis(JSON.parse(text));
+      const text = await callAI([{ role: 'user', content: fullPrompt }]);
+      const cleaned = text.replace(/```json|```/g, '').trim();
+      const match = cleaned.match(/\{[\s\S]*\}/);
+      if (match) setAiAnalysis(JSON.parse(match[0]));
+      else setAiError('Kunne ikke parse AI svar');
     } catch (err) {
       setAiError('Fejl: ' + err.message);
     }
     setAiLoading(false);
   };
 
-  const importFromBank = () => {
-    if (!uploadedText) return;
-    const lines = uploadedText.split('\n').filter(l => l.trim());
-    const imported = [];
-    lines.forEach((line, i) => {
-      if (i === 0) return;
-      const parts = line.split(/[,;]/);
-      if (parts.length >= 3) {
-        const amount = parseFloat(parts[2]?.replace(/[^0-9.-]/g, ''));
-        if (!isNaN(amount) && amount !== 0) {
-          imported.push({ id: Date.now() + i, type: amount > 0 ? 'income' : 'expense', amount: Math.abs(amount), category: 'Andet', description: parts[1]?.trim() || 'Import', date: parts[0]?.trim() || today() });
+  const sendChatMessage = async () => {
+    if (!chatInput.trim() || !apiKey) return;
+    const userMsg = { role: 'user', content: chatInput };
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatInput('');
+    setChatLoading(true);
+    const txSummary = transactions
+      .map(t => t.date + ' | ' + (t.type === 'income' ? 'Indtaegt' : 'Udgift') + ' | ' + t.category + ' | ' + t.description + ' | ' + t.amount + ' kr')
+      .join('\n');
+    const systemContext = 'Du er en dansk personlig okonomi-assistent. Her er brugerens transaktioner:\n\n' + txSummary + '\n\nSvar kort og konkret pa dansk. Brug tal fra dataene.';
+    try {
+      const history = chatMessages.slice(1).map(m => ({ role: m.role, content: m.content }));
+      const reply = await callAI([
+        { role: 'user', content: systemContext },
+        { role: 'assistant', content: 'Jeg har gennemgaet dine transaktioner og er klar til at hjaelpe.' },
+        ...history,
+        userMsg,
+      ]);
+      setChatMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+    } catch (err) {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: 'Beklager, der opstod en fejl: ' + err.message }]);
+    }
+    setChatLoading(false);
+  };
+
+  const autoCategorizeLine = async (line) => {
+    try {
+      const reply = await callAI([{
+        role: 'user',
+        content: 'Kategoriser denne banktransaktion i EN af disse kategorier: Bolig, Mad & Drikke, Transport, Abonnementer, Toj, Underholdning, Sundhed, Opsparing, Andet, Lon, Freelance. Svar KUN med kategorinavnet, intet andet.\n\nTransaktion: ' + line
+      }]);
+      return reply.trim();
+    } catch {
+      return 'Andet';
+    }
+  };
+
+  const importFromBank = async () => {
+    if (uploadedFiles.length === 0) return;
+    let totalImported = 0;
+    const newTx = [];
+    for (const f of uploadedFiles) {
+      const lines = f.text.split('\n').filter(l => l.trim());
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].split(/[,;]/);
+        if (parts.length >= 3) {
+          const amount = parseFloat(parts[2]?.replace(/[^0-9.-]/g, ''));
+          if (!isNaN(amount) && amount !== 0) {
+            const description = parts[1]?.trim() || 'Import';
+            const category = await autoCategorizeLine(description + ' ' + amount + ' kr');
+            newTx.push({
+              id: Date.now() + i + Math.random(),
+              type: amount > 0 ? 'income' : 'expense',
+              amount: Math.abs(amount),
+              category,
+              description,
+              date: parts[0]?.trim() || today(),
+              recurring: false,
+            });
+            totalImported++;
+          }
         }
       }
-    });
-    if (imported.length > 0) { setTransactions(prev => [...prev, ...imported]); alert(`✅ ${imported.length} transaktioner importeret!`); }
-    else alert('Ingen transaktioner fundet. Format: Dato, Beskrivelse, Beløb');
+    }
+    if (totalImported > 0) {
+      setTransactions(prev => [...prev, ...newTx]);
+      alert(totalImported + ' transaktioner importeret med auto-kategorisering!');
+    } else {
+      alert('Ingen transaktioner fundet. Format: Dato, Beskrivelse, Belob');
+    }
   };
 
   const CustomTooltip = ({ active, payload, label }) => active && payload?.length ? (
@@ -222,17 +340,12 @@ export default function App() {
   ) : null;
 
   const DeltaBadge = ({ val }) => {
-    if (val === null) return <span style={{ color: '#475569', fontSize: 11 }}>—</span>;
+    if (val === null) return <span style={{ color: '#475569', fontSize: 11 }}>-</span>;
     const up = parseFloat(val) > 0;
-    return (
-      <span style={{ color: up ? '#E8734A' : '#34D399', fontSize: 11, fontWeight: 700 }}>
-        {up ? '▲' : '▼'} {Math.abs(val)}%
-      </span>
-    );
+    return <span style={{ color: up ? '#E8734A' : '#34D399', fontSize: 11, fontWeight: 700 }}>{up ? 'op' : 'ned'} {Math.abs(val)}%</span>;
   };
 
   const s = styles;
-
   const prevMonthLabel = MONTHS[parseInt(prevMonth.slice(5)) - 1] + ' ' + prevMonth.slice(0, 4);
   const currMonthLabel = MONTHS[parseInt(selectedMonth.slice(5)) - 1] + ' ' + selectedMonth.slice(0, 4);
 
@@ -241,9 +354,9 @@ export default function App() {
       <div style={s.header}>
         <div style={s.logo}><Wallet size={22} color="#D4A853" /><span style={s.logoText}>BudgetPro</span></div>
         <nav style={s.nav}>
-          {['dashboard', 'transaktioner', 'mål', 'ai analyse'].map(tab => (
+          {['dashboard', 'transaktioner', 'mål', 'budget', 'ai analyse', 'chat'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} style={{ ...s.navBtn, ...(activeTab === tab ? s.navBtnActive : {}) }}>
-              {tab === 'ai analyse' ? '🤖 AI' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'ai analyse' ? '🤖 AI' : tab === 'chat' ? '💬 Chat' : tab === 'budget' ? '🎯 Budget' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
         </nav>
@@ -257,22 +370,37 @@ export default function App() {
       </div>
 
       <div style={s.content}>
+
+        {/* BUDGET ALERTS */}
+        {budgetAlerts.length > 0 && activeTab === 'dashboard' && (
+          <div style={{ marginBottom: 16 }}>
+            {budgetAlerts.map(a => (
+              <div key={a.cat} style={{ background: a.pct >= 100 ? '#2e1a0d' : '#1a2010', border: '1px solid ' + (a.pct >= 100 ? '#E8734A' : '#D4A853'), borderRadius: 10, padding: '10px 16px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 16 }}>{a.pct >= 100 ? '🚨' : '⚠️'}</span>
+                <span style={{ color: '#e2e8f0', fontSize: 13 }}>
+                  <strong>{a.cat}</strong>: {formatDKK(a.spent)} af {formatDKK(a.limit)} ({a.pct}%)
+                  {a.pct >= 100 ? ' — Budget overskredet!' : ' — Naermer sig gransen'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {activeTab === 'dashboard' && (
           <>
             <div style={s.kpiRow}>
-              <div style={{ ...s.kpi, borderColor: '#D4A853' }}><div style={s.kpiLabel}><ArrowUpCircle size={14} color="#D4A853" /> Indtægt</div><div style={{ ...s.kpiValue, color: '#D4A853' }}>{formatDKK(totalIncome)}</div></div>
+              <div style={{ ...s.kpi, borderColor: '#D4A853' }}><div style={s.kpiLabel}><ArrowUpCircle size={14} color="#D4A853" /> Indtaegt</div><div style={{ ...s.kpiValue, color: '#D4A853' }}>{formatDKK(totalIncome)}</div></div>
               <div style={{ ...s.kpi, borderColor: '#E8734A' }}><div style={s.kpiLabel}><ArrowDownCircle size={14} color="#E8734A" /> Udgifter</div><div style={{ ...s.kpiValue, color: '#E8734A' }}>{formatDKK(totalExpense)}</div></div>
               <div style={{ ...s.kpi, borderColor: balance >= 0 ? '#34D399' : '#F87171' }}><div style={s.kpiLabel}><Wallet size={14} color={balance >= 0 ? '#34D399' : '#F87171'} /> Balance</div><div style={{ ...s.kpiValue, color: balance >= 0 ? '#34D399' : '#F87171' }}>{formatDKK(balance)}</div></div>
               <div style={{ ...s.kpi, borderColor: '#6B8CFF' }}><div style={s.kpiLabel}><TrendingUp size={14} color="#6B8CFF" /> Opsparingsrate</div><div style={{ ...s.kpiValue, color: '#6B8CFF' }}>{savingsRate}%</div></div>
             </div>
 
-            {/* MÅNEDSOVERSIGT SAMMENLIGNING */}
             {prevMonthTx.length > 0 && (
               <div style={s.card}>
-                <h3 style={s.cardTitle}>📊 Måned til måned — {prevMonthLabel} → {currMonthLabel}</h3>
+                <h3 style={s.cardTitle}>Maned til maned — {prevMonthLabel} vs {currMonthLabel}</h3>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
                   <div style={{ background: '#0d1520', borderRadius: 10, padding: 14 }}>
-                    <div style={{ color: '#64748b', fontSize: 11, marginBottom: 4 }}>INDTÆGT</div>
+                    <div style={{ color: '#64748b', fontSize: 11, marginBottom: 4 }}>INDTAEGT</div>
                     <div style={{ color: '#D4A853', fontWeight: 700, fontSize: 16 }}>{formatDKK(totalIncome)}</div>
                     <DeltaBadge val={pct(totalIncome, prevIncome)} />
                   </div>
@@ -293,15 +421,15 @@ export default function App() {
                       <th style={{ color: '#475569', textAlign: 'left', padding: '6px 0', fontWeight: 600 }}>Kategori</th>
                       <th style={{ color: '#475569', textAlign: 'right', padding: '6px 0', fontWeight: 600 }}>{prevMonthLabel}</th>
                       <th style={{ color: '#475569', textAlign: 'right', padding: '6px 0', fontWeight: 600 }}>{currMonthLabel}</th>
-                      <th style={{ color: '#475569', textAlign: 'right', padding: '6px 0', fontWeight: 600 }}>Ændring</th>
+                      <th style={{ color: '#475569', textAlign: 'right', padding: '6px 0', fontWeight: 600 }}>Aendring</th>
                     </tr>
                   </thead>
                   <tbody>
                     {monthComparison.map(r => (
                       <tr key={r.cat} style={{ borderTop: '1px solid #1a2235' }}>
                         <td style={{ padding: '8px 0', color: '#e2e8f0' }}>{r.cat}</td>
-                        <td style={{ padding: '8px 0', textAlign: 'right', color: '#64748b' }}>{r.prev > 0 ? formatDKK(r.prev) : '—'}</td>
-                        <td style={{ padding: '8px 0', textAlign: 'right', color: '#e2e8f0' }}>{r.curr > 0 ? formatDKK(r.curr) : '—'}</td>
+                        <td style={{ padding: '8px 0', textAlign: 'right', color: '#64748b' }}>{r.prev > 0 ? formatDKK(r.prev) : '-'}</td>
+                        <td style={{ padding: '8px 0', textAlign: 'right', color: '#e2e8f0' }}>{r.curr > 0 ? formatDKK(r.curr) : '-'}</td>
                         <td style={{ padding: '8px 0', textAlign: 'right' }}><DeltaBadge val={r.pctChange} /></td>
                       </tr>
                     ))}
@@ -312,15 +440,15 @@ export default function App() {
 
             <div style={s.chartsRow}>
               <div style={s.card}>
-                <h3 style={s.cardTitle}>Månedsoversigt</h3>
+                <h3 style={s.cardTitle}>Manedsoversigt</h3>
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={barData} barCategoryGap="30%">
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e2d45" />
                     <XAxis dataKey="month" stroke="#4a6080" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                    <YAxis stroke="#4a6080" tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={v => `${v / 1000}k`} />
+                    <YAxis stroke="#4a6080" tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={v => (v/1000) + 'k'} />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend wrapperStyle={{ color: '#94a3b8', fontSize: 12 }} />
-                    <Bar dataKey="Indtægt" fill="#D4A853" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Indtaegt" fill="#D4A853" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="Udgift" fill="#E8734A" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -347,15 +475,19 @@ export default function App() {
                       ))}
                     </div>
                   </>
-                ) : <div style={s.empty}>Ingen udgifter denne måned</div>}
+                ) : <div style={s.empty}>Ingen udgifter denne maned</div>}
               </div>
             </div>
+
             <div style={s.card}>
               <h3 style={s.cardTitle}>Seneste transaktioner</h3>
               {monthTx.slice(-6).reverse().map(t => (
                 <div key={t.id} style={s.txRow}>
                   <div style={{ ...s.txDot, background: t.type === 'income' ? '#34D399' : '#E8734A' }} />
-                  <div style={{ flex: 1 }}><div style={s.txDesc}>{t.description || t.category}</div><div style={s.txMeta}>{t.category} · {t.date}</div></div>
+                  <div style={{ flex: 1 }}>
+                    <div style={s.txDesc}>{t.description || t.category} {t.recurring && <span style={{ fontSize: 10, color: '#6B8CFF', marginLeft: 4 }}>🔄</span>}</div>
+                    <div style={s.txMeta}>{t.category} · {t.date}</div>
+                  </div>
                   <div style={{ ...s.txAmt, color: t.type === 'income' ? '#34D399' : '#E8734A' }}>{t.type === 'income' ? '+' : '-'}{formatDKK(t.amount)}</div>
                 </div>
               ))}
@@ -367,13 +499,19 @@ export default function App() {
           <div style={s.card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h3 style={s.cardTitle}>Alle transaktioner</h3>
-              <span style={s.badge}>{monthTx.length} poster</span>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={s.badge}>{monthTx.length} poster</span>
+                <button onClick={addRecurringNow} style={{ ...s.addBtn, fontSize: 12, padding: '6px 12px' }}><RefreshCw size={12} /> Tilfoej tilbagevendende</button>
+              </div>
             </div>
-            {monthTx.length === 0 && <div style={s.empty}>Ingen transaktioner denne måned</div>}
+            {monthTx.length === 0 && <div style={s.empty}>Ingen transaktioner denne maned</div>}
             {monthTx.sort((a, b) => b.date.localeCompare(a.date)).map(t => (
               <div key={t.id} style={s.txRow}>
                 <div style={{ ...s.txDot, background: t.type === 'income' ? '#34D399' : '#E8734A' }} />
-                <div style={{ flex: 1 }}><div style={s.txDesc}>{t.description || t.category}</div><div style={s.txMeta}>{t.category} · {t.date}</div></div>
+                <div style={{ flex: 1 }}>
+                  <div style={s.txDesc}>{t.description || t.category} {t.recurring && <span style={{ fontSize: 10, color: '#6B8CFF' }}>🔄</span>}</div>
+                  <div style={s.txMeta}>{t.category} · {t.date}</div>
+                </div>
                 <div style={{ ...s.txAmt, color: t.type === 'income' ? '#34D399' : '#E8734A' }}>{t.type === 'income' ? '+' : '-'}{formatDKK(t.amount)}</div>
                 <button onClick={() => deleteTransaction(t.id)} style={s.delBtn}><Trash2 size={14} /></button>
               </div>
@@ -384,12 +522,12 @@ export default function App() {
         {activeTab === 'mål' && (
           <>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-              <button onClick={() => setShowGoalForm(true)} style={s.addBtn}><Plus size={16} /> Nyt mål</button>
+              <button onClick={() => setShowGoalForm(true)} style={s.addBtn}><Plus size={16} /> Nyt maal</button>
             </div>
             <div style={s.kpiRow}>
-              <div style={{ ...s.kpi, borderColor: '#D4A853' }}><div style={s.kpiLabel}><Target size={14} color="#D4A853" /> Aktive mål</div><div style={{ ...s.kpiValue, color: '#D4A853' }}>{goals.length}</div></div>
+              <div style={{ ...s.kpi, borderColor: '#D4A853' }}><div style={s.kpiLabel}><Target size={14} color="#D4A853" /> Aktive maal</div><div style={{ ...s.kpiValue, color: '#D4A853' }}>{goals.length}</div></div>
               <div style={{ ...s.kpi, borderColor: '#4ECDC4' }}><div style={s.kpiLabel}><TrendingUp size={14} color="#4ECDC4" /> Samlet opsparet</div><div style={{ ...s.kpiValue, color: '#4ECDC4' }}>{formatDKK(goals.reduce((s, g) => s + g.saved, 0))}</div></div>
-              <div style={{ ...s.kpi, borderColor: '#A78BFA' }}><div style={s.kpiLabel}><Target size={14} color="#A78BFA" /> Samlet målsum</div><div style={{ ...s.kpiValue, color: '#A78BFA' }}>{formatDKK(goals.reduce((s, g) => s + g.target, 0))}</div></div>
+              <div style={{ ...s.kpi, borderColor: '#A78BFA' }}><div style={s.kpiLabel}><Target size={14} color="#A78BFA" /> Samlet maalsum</div><div style={{ ...s.kpiValue, color: '#A78BFA' }}>{formatDKK(goals.reduce((s, g) => s + g.target, 0))}</div></div>
             </div>
             <div style={s.goalsGrid}>
               {goals.map(g => {
@@ -401,13 +539,13 @@ export default function App() {
                       <div style={{ flex: 1 }}><div style={s.goalName}>{g.name}</div><div style={s.goalMeta}>{formatDKK(g.saved)} af {formatDKK(g.target)}</div></div>
                       <button onClick={() => deleteGoal(g.id)} style={s.delBtn}><Trash2 size={14} /></button>
                     </div>
-                    <div style={s.progressTrack}><div style={{ ...s.progressBar, width: `${pctVal}%`, background: g.color }} /></div>
+                    <div style={s.progressTrack}><div style={{ ...s.progressBar, width: pctVal + '%', background: g.color }} /></div>
                     <div style={s.goalStats}>
                       <span style={{ color: g.color, fontWeight: 700 }}>{pctVal.toFixed(1)}%</span>
                       <span style={{ color: '#64748b' }}>Mangler {formatDKK(g.target - g.saved)}</span>
                     </div>
                     <div style={s.goalActions}>
-                      <input type="number" placeholder="Tilføj beløb..." value={addGoalAmount[g.id] || ''} onChange={e => setAddGoalAmount(prev => ({ ...prev, [g.id]: e.target.value }))} style={s.goalInput} />
+                      <input type="number" placeholder="Tilfoej belob..." value={addGoalAmount[g.id] || ''} onChange={e => setAddGoalAmount(prev => ({ ...prev, [g.id]: e.target.value }))} style={s.goalInput} />
                       <button onClick={() => addToGoal(g.id)} style={{ ...s.goalBtn, background: g.color }}><Plus size={14} /></button>
                     </div>
                   </div>
@@ -417,42 +555,90 @@ export default function App() {
           </>
         )}
 
+        {activeTab === 'budget' && (
+          <div style={s.card}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={s.cardTitle}>Budgetgraenser per kategori</h3>
+            </div>
+            {CATEGORIES.expense.map(cat => {
+              const spent = categorySpend[cat] || 0;
+              const limit = budgets[cat] || 0;
+              const p = limit > 0 ? Math.min((spent / limit) * 100, 100) : 0;
+              const color = p >= 100 ? '#E8734A' : p >= 80 ? '#D4A853' : '#34D399';
+              return (
+                <div key={cat} style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ color: '#e2e8f0', fontSize: 14 }}>{cat}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ color: color, fontSize: 13, fontWeight: 600 }}>{formatDKK(spent)}</span>
+                      <span style={{ color: '#475569', fontSize: 12 }}>af</span>
+                      <input
+                        type="number"
+                        value={budgets[cat] || ''}
+                        onChange={e => setBudgets(prev => ({ ...prev, [cat]: parseFloat(e.target.value) || 0 }))}
+                        style={{ ...s.goalInput, width: 90, textAlign: 'right' }}
+                        placeholder="Granse..."
+                      />
+                    </div>
+                  </div>
+                  {limit > 0 && (
+                    <div style={s.progressTrack}>
+                      <div style={{ ...s.progressBar, width: p + '%', background: color }} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {activeTab === 'ai analyse' && (
           <>
             <div style={{ ...s.card, borderColor: '#D4A85344' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                 <Key size={16} color="#D4A853" />
-                <h3 style={{ ...s.cardTitle, margin: 0 }}>Anthropic API Nøgle</h3>
-                {apiKey && <span style={{ background: '#0d2e1e', color: '#34D399', borderRadius: 20, padding: '2px 10px', fontSize: 11 }}>✓ Gemt</span>}
+                <h3 style={{ ...s.cardTitle, margin: 0 }}>Anthropic API Noegle</h3>
+                {apiKey && <span style={{ background: '#0d2e1e', color: '#34D399', borderRadius: 20, padding: '2px 10px', fontSize: 11 }}>Gemt</span>}
               </div>
               <input type="password" placeholder="sk-ant-..." value={apiKey} onChange={e => setApiKey(e.target.value)} style={{ ...s.input, width: '100%', boxSizing: 'border-box' }} />
-              <p style={{ color: '#475569', fontSize: 11, marginTop: 8 }}>Opret gratis nøgle på console.anthropic.com</p>
+              <p style={{ color: '#475569', fontSize: 11, marginTop: 8 }}>Opret gratis noegle pa console.anthropic.com</p>
             </div>
 
             <div style={s.card}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                 <Upload size={16} color="#4ECDC4" />
-                <h3 style={{ ...s.cardTitle, margin: 0 }}>Upload kontoudtog (CSV eller PDF)</h3>
+                <h3 style={{ ...s.cardTitle, margin: 0 }}>Upload kontoudtog ({uploadedFiles.length > 0 ? uploadedFiles.length + ' fil(er) indlaest' : 'CSV eller PDF'})</h3>
               </div>
-              <div style={{ border: '2px dashed #2d3f5e', borderRadius: 12, padding: 30, textAlign: 'center' }}>
-                <input type="file" accept=".csv,.txt,.pdf" onChange={handleFileUpload} style={{ display: 'none' }} id="fileInput" />
-                <label htmlFor="fileInput" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+              {uploadedFiles.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  {uploadedFiles.map((f, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#0d1520', borderRadius: 8, padding: '8px 12px', marginBottom: 6 }}>
+                      <span style={{ fontSize: 16 }}>📄</span>
+                      <span style={{ flex: 1, color: '#e2e8f0', fontSize: 13 }}>{f.name}</span>
+                      <button onClick={() => removeFile(i)} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><X size={14} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ border: '2px dashed #2d3f5e', borderRadius: 12, padding: 24, textAlign: 'center' }}>
+                <input type="file" accept=".csv,.txt,.pdf" onChange={handleFileUpload} style={{ display: 'none' }} id="fileInput" multiple />
+                <label htmlFor="fileInput" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                   <Upload size={24} color="#4ECDC4" />
-                  <span style={{ color: '#94a3b8', fontSize: 14 }}>{uploadedText ? '✅ Fil indlæst!' : 'Klik for at vælge CSV eller PDF fil'}</span>
+                  <span style={{ color: '#94a3b8', fontSize: 14 }}>Klik for at tilfoeje filer (flere banker understottet)</span>
                 </label>
               </div>
-              {uploadedText && (
+              {uploadedFiles.length > 0 && (
                 <button onClick={importFromBank} style={{ ...s.confirmBtn, width: '100%', marginTop: 12, padding: '10px 0' }}>
-                  📥 Importér transaktioner
+                  Importer med auto-kategorisering
                 </button>
               )}
             </div>
 
             <button onClick={runAiAnalysis} disabled={aiLoading} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, background: 'linear-gradient(135deg, #6B8CFF, #A78BFA)', border: 'none', borderRadius: 12, padding: '14px 0', fontSize: 16, fontWeight: 700, color: '#fff', cursor: 'pointer', marginBottom: 16, opacity: aiLoading ? 0.7 : 1 }}>
-              <Brain size={18} />{aiLoading ? 'Analyserer din økonomi...' : '🤖 Analysér med AI'}
+              <Brain size={18} />{aiLoading ? 'Analyserer din oekonomi...' : 'Analyser med AI'}
             </button>
 
-            {aiError && <div style={{ background: '#2e1a0d', border: '1px solid #E8734A', borderRadius: 12, padding: 16, marginBottom: 16, color: '#E8734A', fontSize: 13 }}>⚠️ {aiError}</div>}
+            {aiError && <div style={{ background: '#2e1a0d', border: '1px solid #E8734A', borderRadius: 12, padding: 16, marginBottom: 16, color: '#E8734A', fontSize: 13 }}>Fejl: {aiError}</div>}
 
             {aiAnalysis && (
               <>
@@ -463,22 +649,22 @@ export default function App() {
                 </div>
                 <div style={s.chartsRow}>
                   <div style={{ ...s.card, borderColor: '#34D39944' }}>
-                    <h3 style={{ ...s.cardTitle, color: '#34D399' }}>✅ Styrker</h3>
-                    {aiAnalysis.styrker?.map((str, i) => <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 10, fontSize: 13, color: '#e2e8f0' }}><span style={{ color: '#34D399' }}>•</span>{str}</div>)}
+                    <h3 style={{ ...s.cardTitle, color: '#34D399' }}>Styrker</h3>
+                    {aiAnalysis.styrker?.map((str, i) => <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 10, fontSize: 13, color: '#e2e8f0' }}><span style={{ color: '#34D399' }}>*</span>{str}</div>)}
                   </div>
                   <div style={{ ...s.card, borderColor: '#E8734A44' }}>
-                    <h3 style={{ ...s.cardTitle, color: '#E8734A' }}>⚠️ Opmærksomhed</h3>
-                    {aiAnalysis.advarsler?.map((a, i) => <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 10, fontSize: 13, color: '#e2e8f0' }}><span style={{ color: '#E8734A' }}>•</span>{a}</div>)}
+                    <h3 style={{ ...s.cardTitle, color: '#E8734A' }}>Opmaerksomhed</h3>
+                    {aiAnalysis.advarsler?.map((a, i) => <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 10, fontSize: 13, color: '#e2e8f0' }}><span style={{ color: '#E8734A' }}>*</span>{a}</div>)}
                   </div>
                 </div>
                 <div style={s.card}>
-                  <h3 style={{ ...s.cardTitle, color: '#6B8CFF' }}>🚀 Vækststrategier</h3>
+                  <h3 style={{ ...s.cardTitle, color: '#6B8CFF' }}>Vaekststrategier</h3>
                   <div style={s.goalsGrid}>
                     {aiAnalysis.strategier?.map((strat, i) => (
                       <div key={i} style={{ background: '#0d1520', border: '1px solid #2d3f5e', borderRadius: 12, padding: 16 }}>
                         <div style={{ fontWeight: 700, color: '#e2e8f0', marginBottom: 6 }}>{strat.titel}</div>
                         <div style={{ color: '#94a3b8', fontSize: 13, lineHeight: 1.5, marginBottom: 8 }}>{strat.beskrivelse}</div>
-                        {strat.besparelse && <div style={{ color: '#34D399', fontSize: 12, fontWeight: 600 }}>💰 {strat.besparelse}</div>}
+                        {strat.besparelse && <div style={{ color: '#34D399', fontSize: 12, fontWeight: 600 }}>{strat.besparelse}</div>}
                       </div>
                     ))}
                   </div>
@@ -487,17 +673,57 @@ export default function App() {
             )}
           </>
         )}
+
+        {activeTab === 'chat' && (
+          <div style={{ ...s.card, display: 'flex', flexDirection: 'column', height: 600 }}>
+            <h3 style={s.cardTitle}>Chat med din oekonomi</h3>
+            <div style={{ flex: 1, overflowY: 'auto', marginBottom: 16 }}>
+              {chatMessages.map((m, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
+                  <div style={{
+                    maxWidth: '80%', padding: '10px 14px', borderRadius: 12,
+                    background: m.role === 'user' ? '#6B8CFF' : '#1a2235',
+                    color: '#e2e8f0', fontSize: 14, lineHeight: 1.5,
+                  }}>
+                    {m.content}
+                  </div>
+                </div>
+              ))}
+              {chatLoading && (
+                <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 12 }}>
+                  <div style={{ background: '#1a2235', padding: '10px 14px', borderRadius: 12, color: '#64748b', fontSize: 14 }}>
+                    Taenker...
+                  </div>
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="text"
+                placeholder="Stil et sporgsmal om din oekonomi..."
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && sendChatMessage()}
+                style={{ ...s.input, flex: 1 }}
+              />
+              <button onClick={sendChatMessage} disabled={chatLoading} style={{ ...s.addBtn, padding: '8px 16px' }}>
+                <Send size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {showForm && (
         <div style={s.overlay} onClick={() => setShowForm(false)}>
           <div style={s.modal} onClick={e => e.stopPropagation()}>
-            <h3 style={{ color: '#e2e8f0', marginBottom: 20 }}>Tilføj transaktion</h3>
+            <h3 style={{ color: '#e2e8f0', marginBottom: 20 }}>Tilfoej transaktion</h3>
             <div style={s.typeToggle}>
-              <button onClick={() => setForm(f => ({ ...f, type: 'income', category: 'Løn' }))} style={{ ...s.typeBtn, ...(form.type === 'income' ? s.typeBtnIncomeActive : {}) }}><ArrowUpCircle size={15} /> Indtægt</button>
+              <button onClick={() => setForm(f => ({ ...f, type: 'income', category: 'Lon' }))} style={{ ...s.typeBtn, ...(form.type === 'income' ? s.typeBtnIncomeActive : {}) }}><ArrowUpCircle size={15} /> Indtaegt</button>
               <button onClick={() => setForm(f => ({ ...f, type: 'expense', category: 'Mad & Drikke' }))} style={{ ...s.typeBtn, ...(form.type === 'expense' ? s.typeBtnExpenseActive : {}) }}><ArrowDownCircle size={15} /> Udgift</button>
             </div>
-            <div style={s.field}><label style={s.label}>Beløb (DKK)</label><input type="number" placeholder="0" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} style={s.input} /></div>
+            <div style={s.field}><label style={s.label}>Belob (DKK)</label><input type="number" placeholder="0" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} style={s.input} /></div>
             <div style={s.field}><label style={s.label}>Kategori</label>
               <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} style={s.input}>
                 {CATEGORIES[form.type].map(c => <option key={c}>{c}</option>)}
@@ -505,6 +731,12 @@ export default function App() {
             </div>
             <div style={s.field}><label style={s.label}>Beskrivelse</label><input type="text" placeholder="Valgfri..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} style={s.input} /></div>
             <div style={s.field}><label style={s.label}>Dato</label><input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} style={s.input} /></div>
+            <div style={s.field}>
+              <label style={{ ...s.label, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input type="checkbox" checked={form.recurring} onChange={e => setForm(f => ({ ...f, recurring: e.target.checked }))} />
+                Tilbagevendende transaktion
+              </label>
+            </div>
             <div style={s.modalBtns}>
               <button onClick={() => setShowForm(false)} style={s.cancelBtn}>Annuller</button>
               <button onClick={addTransaction} style={s.confirmBtn}>Gem transaktion</button>
@@ -516,7 +748,7 @@ export default function App() {
       {showGoalForm && (
         <div style={s.overlay} onClick={() => setShowGoalForm(false)}>
           <div style={s.modal} onClick={e => e.stopPropagation()}>
-            <h3 style={{ color: '#e2e8f0', marginBottom: 20 }}>Nyt opsparingsmål</h3>
+            <h3 style={{ color: '#e2e8f0', marginBottom: 20 }}>Nyt opsparingsmaal</h3>
             <div style={s.field}>
               <label style={s.label}>Ikon</label>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -526,11 +758,11 @@ export default function App() {
               </div>
             </div>
             <div style={s.field}><label style={s.label}>Navn</label><input type="text" placeholder="f.eks. Sommerferie" value={goalForm.name} onChange={e => setGoalForm(f => ({ ...f, name: e.target.value }))} style={s.input} /></div>
-            <div style={s.field}><label style={s.label}>Målbeløb (DKK)</label><input type="number" placeholder="0" value={goalForm.target} onChange={e => setGoalForm(f => ({ ...f, target: e.target.value }))} style={s.input} /></div>
+            <div style={s.field}><label style={s.label}>Maalbelob (DKK)</label><input type="number" placeholder="0" value={goalForm.target} onChange={e => setGoalForm(f => ({ ...f, target: e.target.value }))} style={s.input} /></div>
             <div style={s.field}><label style={s.label}>Allerede opsparet (DKK)</label><input type="number" placeholder="0" value={goalForm.saved} onChange={e => setGoalForm(f => ({ ...f, saved: e.target.value }))} style={s.input} /></div>
             <div style={s.modalBtns}>
               <button onClick={() => setShowGoalForm(false)} style={s.cancelBtn}>Annuller</button>
-              <button onClick={addGoal} style={s.confirmBtn}>Opret mål</button>
+              <button onClick={addGoal} style={s.confirmBtn}>Opret maal</button>
             </div>
           </div>
         </div>
