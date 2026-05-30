@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import {
   TrendingUp, Target, Plus, Trash2, Wallet,
-  ArrowUpCircle, ArrowDownCircle, Brain, Upload, Key,
+  ArrowUpCircle, ArrowDownCircle, Brain, Upload, Key, TrendingDown,
 } from 'lucide-react';
 
 const COLORS = ['#D4A853','#4ECDC4','#E8734A','#6B8CFF','#A78BFA','#34D399','#F472B6','#60A5FA'];
@@ -27,6 +27,12 @@ const getLast12Months = () => {
   }
   return months;
 };
+const getPrevMonth = (month) => {
+  const d = new Date(month + '-01');
+  d.setMonth(d.getMonth() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+const pct = (curr, prev) => prev === 0 ? null : (((curr - prev) / prev) * 100).toFixed(1);
 
 const initialTransactions = [
   { id: 1, type: 'income', amount: 38000, category: 'Løn', description: 'Månedlig løn', date: '2026-05-25' },
@@ -36,6 +42,12 @@ const initialTransactions = [
   { id: 5, type: 'income', amount: 5000, category: 'Freelance', description: 'Design projekt', date: '2026-05-20' },
   { id: 6, type: 'expense', amount: 1200, category: 'Transport', description: 'DSB kort', date: '2026-05-01' },
   { id: 7, type: 'expense', amount: 2000, category: 'Opsparing', description: 'Månedlig opsparing', date: '2026-05-05' },
+  { id: 8, type: 'income', amount: 38000, category: 'Løn', description: 'Månedlig løn', date: '2026-04-25' },
+  { id: 9, type: 'expense', amount: 9500, category: 'Bolig', description: 'Husleje', date: '2026-04-01' },
+  { id: 10, type: 'expense', amount: 4100, category: 'Mad & Drikke', description: 'Dagligvarer', date: '2026-04-15' },
+  { id: 11, type: 'expense', amount: 499, category: 'Abonnementer', description: 'Streaming', date: '2026-04-10' },
+  { id: 12, type: 'expense', amount: 1200, category: 'Transport', description: 'DSB kort', date: '2026-04-01' },
+  { id: 13, type: 'expense', amount: 2500, category: 'Tøj', description: 'Nyt tøj', date: '2026-04-20' },
 ];
 const initialGoals = [
   { id: 1, name: 'Sommerferie', target: 20000, saved: 8500, color: '#D4A853', icon: '✈️' },
@@ -70,10 +82,25 @@ export default function App() {
   useEffect(() => { localStorage.setItem('budget_apikey', apiKey); }, [apiKey]);
 
   const monthTx = useMemo(() => transactions.filter(t => monthKey(t.date) === selectedMonth), [transactions, selectedMonth]);
+  const prevMonth = useMemo(() => getPrevMonth(selectedMonth), [selectedMonth]);
+  const prevMonthTx = useMemo(() => transactions.filter(t => monthKey(t.date) === prevMonth), [transactions, prevMonth]);
+
   const totalIncome = useMemo(() => monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0), [monthTx]);
   const totalExpense = useMemo(() => monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0), [monthTx]);
+  const prevIncome = useMemo(() => prevMonthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0), [prevMonthTx]);
+  const prevExpense = useMemo(() => prevMonthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0), [prevMonthTx]);
   const balance = totalIncome - totalExpense;
+  const prevBalance = prevIncome - prevExpense;
   const savingsRate = totalIncome > 0 ? ((balance / totalIncome) * 100).toFixed(1) : 0;
+
+  const monthComparison = useMemo(() => {
+    const categories = CATEGORIES.expense;
+    return categories.map(cat => {
+      const curr = monthTx.filter(t => t.type === 'expense' && t.category === cat).reduce((s, t) => s + t.amount, 0);
+      const prev = prevMonthTx.filter(t => t.type === 'expense' && t.category === cat).reduce((s, t) => s + t.amount, 0);
+      return { cat, curr, prev, diff: curr - prev, pctChange: pct(curr, prev) };
+    }).filter(r => r.curr > 0 || r.prev > 0);
+  }, [monthTx, prevMonthTx]);
 
   const pieData = useMemo(() => {
     const map = {};
@@ -114,27 +141,26 @@ export default function App() {
   const deleteGoal = (id) => setGoals(prev => prev.filter(g => g.id !== id));
 
   const handleFileUpload = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  if (file.type === 'application/pdf') {
-    const pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    let fullText = '';
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      fullText += content.items.map(item => item.str).join(' ') + '\n';
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.type === 'application/pdf') {
+      const pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        fullText += content.items.map(item => item.str).join(' ') + '\n';
+      }
+      setUploadedText(fullText);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (ev) => setUploadedText(ev.target?.result);
+      reader.readAsText(file);
     }
-    setUploadedText(fullText);
-  } else {
-    const reader = new FileReader();
-    reader.onload = (ev) => setUploadedText(ev.target?.result);
-    reader.readAsText(file);
-  }
-};
+  };
 
   const runAiAnalysis = async () => {
     if (!apiKey) return;
@@ -195,7 +221,20 @@ export default function App() {
     </div>
   ) : null;
 
+  const DeltaBadge = ({ val }) => {
+    if (val === null) return <span style={{ color: '#475569', fontSize: 11 }}>—</span>;
+    const up = parseFloat(val) > 0;
+    return (
+      <span style={{ color: up ? '#E8734A' : '#34D399', fontSize: 11, fontWeight: 700 }}>
+        {up ? '▲' : '▼'} {Math.abs(val)}%
+      </span>
+    );
+  };
+
   const s = styles;
+
+  const prevMonthLabel = MONTHS[parseInt(prevMonth.slice(5)) - 1] + ' ' + prevMonth.slice(0, 4);
+  const currMonthLabel = MONTHS[parseInt(selectedMonth.slice(5)) - 1] + ' ' + selectedMonth.slice(0, 4);
 
   return (
     <div style={s.root}>
@@ -226,6 +265,51 @@ export default function App() {
               <div style={{ ...s.kpi, borderColor: balance >= 0 ? '#34D399' : '#F87171' }}><div style={s.kpiLabel}><Wallet size={14} color={balance >= 0 ? '#34D399' : '#F87171'} /> Balance</div><div style={{ ...s.kpiValue, color: balance >= 0 ? '#34D399' : '#F87171' }}>{formatDKK(balance)}</div></div>
               <div style={{ ...s.kpi, borderColor: '#6B8CFF' }}><div style={s.kpiLabel}><TrendingUp size={14} color="#6B8CFF" /> Opsparingsrate</div><div style={{ ...s.kpiValue, color: '#6B8CFF' }}>{savingsRate}%</div></div>
             </div>
+
+            {/* MÅNEDSOVERSIGT SAMMENLIGNING */}
+            {prevMonthTx.length > 0 && (
+              <div style={s.card}>
+                <h3 style={s.cardTitle}>📊 Måned til måned — {prevMonthLabel} → {currMonthLabel}</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+                  <div style={{ background: '#0d1520', borderRadius: 10, padding: 14 }}>
+                    <div style={{ color: '#64748b', fontSize: 11, marginBottom: 4 }}>INDTÆGT</div>
+                    <div style={{ color: '#D4A853', fontWeight: 700, fontSize: 16 }}>{formatDKK(totalIncome)}</div>
+                    <DeltaBadge val={pct(totalIncome, prevIncome)} />
+                  </div>
+                  <div style={{ background: '#0d1520', borderRadius: 10, padding: 14 }}>
+                    <div style={{ color: '#64748b', fontSize: 11, marginBottom: 4 }}>UDGIFTER</div>
+                    <div style={{ color: '#E8734A', fontWeight: 700, fontSize: 16 }}>{formatDKK(totalExpense)}</div>
+                    <DeltaBadge val={pct(totalExpense, prevExpense)} />
+                  </div>
+                  <div style={{ background: '#0d1520', borderRadius: 10, padding: 14 }}>
+                    <div style={{ color: '#64748b', fontSize: 11, marginBottom: 4 }}>BALANCE</div>
+                    <div style={{ color: balance >= 0 ? '#34D399' : '#F87171', fontWeight: 700, fontSize: 16 }}>{formatDKK(balance)}</div>
+                    <DeltaBadge val={pct(balance, prevBalance)} />
+                  </div>
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ color: '#475569', textAlign: 'left', padding: '6px 0', fontWeight: 600 }}>Kategori</th>
+                      <th style={{ color: '#475569', textAlign: 'right', padding: '6px 0', fontWeight: 600 }}>{prevMonthLabel}</th>
+                      <th style={{ color: '#475569', textAlign: 'right', padding: '6px 0', fontWeight: 600 }}>{currMonthLabel}</th>
+                      <th style={{ color: '#475569', textAlign: 'right', padding: '6px 0', fontWeight: 600 }}>Ændring</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthComparison.map(r => (
+                      <tr key={r.cat} style={{ borderTop: '1px solid #1a2235' }}>
+                        <td style={{ padding: '8px 0', color: '#e2e8f0' }}>{r.cat}</td>
+                        <td style={{ padding: '8px 0', textAlign: 'right', color: '#64748b' }}>{r.prev > 0 ? formatDKK(r.prev) : '—'}</td>
+                        <td style={{ padding: '8px 0', textAlign: 'right', color: '#e2e8f0' }}>{r.curr > 0 ? formatDKK(r.curr) : '—'}</td>
+                        <td style={{ padding: '8px 0', textAlign: 'right' }}><DeltaBadge val={r.pctChange} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
             <div style={s.chartsRow}>
               <div style={s.card}>
                 <h3 style={s.cardTitle}>Månedsoversigt</h3>
@@ -309,7 +393,7 @@ export default function App() {
             </div>
             <div style={s.goalsGrid}>
               {goals.map(g => {
-                const pct = Math.min((g.saved / g.target) * 100, 100);
+                const pctVal = Math.min((g.saved / g.target) * 100, 100);
                 return (
                   <div key={g.id} style={{ ...s.goalCard, borderColor: g.color + '44' }}>
                     <div style={s.goalHeader}>
@@ -317,9 +401,9 @@ export default function App() {
                       <div style={{ flex: 1 }}><div style={s.goalName}>{g.name}</div><div style={s.goalMeta}>{formatDKK(g.saved)} af {formatDKK(g.target)}</div></div>
                       <button onClick={() => deleteGoal(g.id)} style={s.delBtn}><Trash2 size={14} /></button>
                     </div>
-                    <div style={s.progressTrack}><div style={{ ...s.progressBar, width: `${pct}%`, background: g.color }} /></div>
+                    <div style={s.progressTrack}><div style={{ ...s.progressBar, width: `${pctVal}%`, background: g.color }} /></div>
                     <div style={s.goalStats}>
-                      <span style={{ color: g.color, fontWeight: 700 }}>{pct.toFixed(1)}%</span>
+                      <span style={{ color: g.color, fontWeight: 700 }}>{pctVal.toFixed(1)}%</span>
                       <span style={{ color: '#64748b' }}>Mangler {formatDKK(g.target - g.saved)}</span>
                     </div>
                     <div style={s.goalActions}>
@@ -348,13 +432,13 @@ export default function App() {
             <div style={s.card}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                 <Upload size={16} color="#4ECDC4" />
-                <h3 style={{ ...s.cardTitle, margin: 0 }}>Upload kontoudtog (CSV)</h3>
+                <h3 style={{ ...s.cardTitle, margin: 0 }}>Upload kontoudtog (CSV eller PDF)</h3>
               </div>
               <div style={{ border: '2px dashed #2d3f5e', borderRadius: 12, padding: 30, textAlign: 'center' }}>
                 <input type="file" accept=".csv,.txt,.pdf" onChange={handleFileUpload} style={{ display: 'none' }} id="fileInput" />
                 <label htmlFor="fileInput" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                   <Upload size={24} color="#4ECDC4" />
-                  <span style={{ color: '#94a3b8', fontSize: 14 }}>{uploadedText ? '✅ Fil indlæst!' : 'Klik for at vælge fil'}</span>
+                  <span style={{ color: '#94a3b8', fontSize: 14 }}>{uploadedText ? '✅ Fil indlæst!' : 'Klik for at vælge CSV eller PDF fil'}</span>
                 </label>
               </div>
               {uploadedText && (
