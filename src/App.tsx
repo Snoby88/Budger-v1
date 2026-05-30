@@ -345,7 +345,7 @@ export default function App() {
             'x-api-key': apiKey,
             'anthropic-version': '2023-06-01',
           },
-            body: JSON.stringify({ apiKey, messages: [{ role: 'user', content: prompt }],
+          body: JSON.stringify({ apiKey, messages: [{ role: 'user', content: prompt }] }),
         }
       );
       const data = await res.json();
