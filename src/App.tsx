@@ -170,9 +170,9 @@ export default function App() {
     const txSummary = transactions
       .map(t => `${t.date} | ${t.type === 'income' ? 'Indtægt' : 'Udgift'} | ${t.category} | ${t.description} | ${t.amount} kr`)
       .join('\n');
-    const prompt = uploadedText
-      ? `Du er en dansk finansiel rådgiver. Analyser dette kontoudtog og giv en struktureret analyse på dansk:\n\n${uploadedText}\n\nGiv følgende i JSON format:\n{\n  "overblik": "2-3 sætninger",\n  "topUdgifter": [{"kategori": "...", "beløb": 0, "tip": "..."}],\n  "styrker": ["..."],\n  "advarsler": ["..."],\n  "strategier": [{"titel": "...", "beskrivelse": "...", "besparelse": "..."}],\n  "score": 0\n}\nKun JSON, ingen markdown.`
-      : `Du er en dansk finansiel rådgiver. Analyser disse transaktioner:\n\n${txSummary}\n\nGiv følgende i JSON format:\n{\n  "overblik": "2-3 sætninger",\n  "topUdgifter": [{"kategori": "...", "beløb": 0, "tip": "..."}],\n  "styrker": ["..."],\n  "advarsler": ["..."],\n  "strategier": [{"titel": "...", "beskrivelse": "...", "besparelse": "..."}],\n  "score": 0\n}\nKun JSON, ingen markdown.`;
+  const prompt = uploadedText
+      ? `Du er en dansk finansiel rådgiver. Analyser dette kontoudtog.\n\nIdentificér automatisk hvilken periode dataene dækker og inkludér det i dit overblik.\n\nKontoudtog:\n${uploadedText.slice(0, 12000)}\n\nGiv følgende i JSON format:\n{\n  "overblik": "Inkludér den identificerede periode og 2-3 sætninger",\n  "topUdgifter": [{"kategori": "...", "beløb": 0, "tip": "..."}],\n  "styrker": ["..."],\n  "advarsler": ["..."],\n  "strategier": [{"titel": "...", "beskrivelse": "...", "besparelse": "..."}],\n  "score": 0\n}\nKun JSON, ingen markdown.`
+      : `Du er en dansk finansiel rådgiver. Analyser disse transaktioner og identificér automatisk perioden:\n\n${txSummary}\n\nGiv følgende i JSON format:\n{\n  "overblik": "Inkludér den identificerede periode og 2-3 sætninger",\n  "topUdgifter": [{"kategori": "...", "beløb": 0,
     try {
       const res = await fetch('/.netlify/functions/claude', {
         method: 'POST',
