@@ -113,13 +113,28 @@ export default function App() {
   };
   const deleteGoal = (id) => setGoals(prev => prev.filter(g => g.id !== id));
 
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  const handleFileUpload = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  if (file.type === 'application/pdf') {
+    const pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      fullText += content.items.map(item => item.str).join(' ') + '\n';
+    }
+    setUploadedText(fullText);
+  } else {
     const reader = new FileReader();
     reader.onload = (ev) => setUploadedText(ev.target?.result);
     reader.readAsText(file);
-  };
+  }
+};
 
   const runAiAnalysis = async () => {
     if (!apiKey) return;
